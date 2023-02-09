@@ -3,6 +3,7 @@ package com.example.springcucumberdemo.controller;
 import com.example.springcucumberdemo.model.Guitar;
 import com.example.springcucumberdemo.service.GuitarService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -13,6 +14,7 @@ public class GuitarController {
     private final GuitarService guitarService;
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     Guitar createGuitar(@RequestBody Guitar guitar) {
         return guitarService.createGuitar(guitar);
     }
