@@ -10,7 +10,6 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Assertions;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
@@ -26,17 +25,16 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CucumberSteps {
 
-    @Autowired
-    private GuitarRepository guitarRepository;
+    private final GuitarRepository guitarRepository;
 
     @LocalServerPort
-    String port;
+    private String port;
 
     private HttpEntity<Guitar> requestEntity;
 
-    private ResponseEntity<Guitar> guitarResponse;
+    private ResponseEntity<?> response;
 
-    private ResponseEntity<List<Guitar>> guitarsResponse;
+    private Long existingGuitarId;
 
     private final TestRestTemplate restTemplate;
 
@@ -53,8 +51,8 @@ public class CucumberSteps {
     }
 
     @When("the client makes POST request on endpoint {string}")
-    public void whenClientCallsEndpoint(String path) {
-        guitarResponse = restTemplate.exchange(
+    public void whenClientCallsCreateGuitar(String path) {
+        response = restTemplate.exchange(
                 "http://localhost:" + this.port + path,
                 HttpMethod.POST,
                 requestEntity,
@@ -63,18 +61,21 @@ public class CucumberSteps {
 
     @Then("response status code is {int}")
     public void thenStatusCode(int expectedStatusCode) {
-        Assertions.assertEquals(expectedStatusCode, guitarResponse.getStatusCode().value());
+        Assertions.assertEquals(expectedStatusCode, response.getStatusCode().value());
     }
 
-    @And("response body contains manufacturer {string} and model {string} and finish {string} and serial number {string} and amount {bigdecimal}")
+    @And("response contains manufacturer {string} and model {string} and finish {string} and serial number {string} and amount {bigdecimal}")
     public void responseBodyMatches(String manufacturer, String model, String finish, String serialNumber, BigDecimal amount) {
-        Assertions.assertNotNull(guitarResponse.getBody());
-        Assertions.assertNotNull(guitarResponse.getBody().id());
-        Assertions.assertEquals(manufacturer, guitarResponse.getBody().manufacturer());
-        Assertions.assertEquals(model, guitarResponse.getBody().model());
-        Assertions.assertEquals(finish, guitarResponse.getBody().finish());
-        Assertions.assertEquals(serialNumber, guitarResponse.getBody().serialNumber());
-        Assertions.assertEquals(amount, guitarResponse.getBody().amount());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody() instanceof Guitar);
+        var response = (Guitar) this.response.getBody();
+
+        Assertions.assertNotNull(response.id());
+        Assertions.assertEquals(manufacturer, response.manufacturer());
+        Assertions.assertEquals(model, response.model());
+        Assertions.assertEquals(finish, response.finish());
+        Assertions.assertEquals(serialNumber, response.serialNumber());
+        Assertions.assertEquals(amount, response.amount());
     }
 
     @Given("there are following guitars in the database")
@@ -100,7 +101,7 @@ public class CucumberSteps {
 
     @When("the client makes GET request on endpoint {string}")
     public void whenClientCallsGetGuitars(String path) {
-        guitarsResponse = restTemplate.exchange(
+        response = restTemplate.exchange(
                 "http://localhost:" + this.port + path,
                 HttpMethod.GET,
                 null,
@@ -110,8 +111,50 @@ public class CucumberSteps {
 
     @Then("response contains {int} guitars")
     public void responseBodyContainsThreeGuitars(int expectedInt) {
-        Assertions.assertNotNull(guitarsResponse.getBody());
-        Assertions.assertEquals(expectedInt, guitarsResponse.getBody().size());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody() instanceof ArrayList);
+
+        var response = (ArrayList) this.response.getBody();
+
+        Assertions.assertEquals(expectedInt, response.size());
+    }
+
+    @Given("a guitar exists in the database with manufacturer {string} and model {string}" +
+            " and finish {string} and serial number {string} and amount {bigdecimal}")
+    public void givenGuitarExistsInDatabase(String manufacturer, String model, String finish, String serialNumber, BigDecimal amount) {
+        var guitar = new Guitar(null, manufacturer, model, finish, serialNumber, amount);
+
+        guitar = guitarRepository.save(guitar);
+
+        existingGuitarId = guitar.id();
+
+        System.out.println(existingGuitarId);
+
+    }
+
+    @When("the client makes GET request on endpoint {string} with existing guitar id")
+    public void whenClientCallsGetGuitar(String path) {
+        response = restTemplate.exchange(
+                "http://localhost:" + this.port + path,
+                HttpMethod.GET,
+                null,
+                Guitar.class,
+                Map.of("id", existingGuitarId));
+    }
+
+    @When("the client makes DELETE request on endpoint {string} with existing guitar id")
+    public void whenClientCallsDeleteGuitar(String path) {
+        response = restTemplate.exchange(
+                "http://localhost:" + this.port + path,
+                HttpMethod.DELETE,
+                null,
+                Void.class,
+                Map.of("id", existingGuitarId));
+    }
+
+    @And("response is empty")
+    public void responseIsEmpty() {
+        Assertions.assertNull(response.getBody());
     }
 
 }
